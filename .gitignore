@@ -7,3 +7,4 @@ wandb/
 *.zip
 .ipynb_checkpoints/
 submissions/
+.env
