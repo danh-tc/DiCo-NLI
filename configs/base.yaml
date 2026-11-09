@@ -1,0 +1,15 @@
+# Defaults shared by every experiment; an experiment config overrides any key.
+model_name: microsoft/deberta-v3-base
+method: m0                 # m0 = 4-class cross-encoder
+train_tracks: [1]
+eval_tracks: [1]
+max_len: 64                # phrases are short
+lr: 2.0e-5
+epochs: 5
+batch_size: 32
+eval_batch_size: 128
+grad_accum: 1
+warmup_ratio: 0.1
+weight_decay: 0.01
+keep_model: false          # true when you need the model for test predictions
+decoders: [argmax, joint, joint_structural]

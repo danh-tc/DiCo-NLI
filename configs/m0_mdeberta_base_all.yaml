@@ -1,0 +1,6 @@
+# Baseline M0, one multilingual model trained jointly on all tracks.
+name: m0_mdeberta_base_all
+model_name: microsoft/mdeberta-v3-base
+train_tracks: [1, 2, 3, 4]
+eval_tracks: [1, 2, 3, 4]
+epochs: 3

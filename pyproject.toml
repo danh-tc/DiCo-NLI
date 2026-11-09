@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dico-nli"
+version = "0.1.0"
+description = "System for SemEval-2027 Task 2: DiCo-NLI"
+requires-python = ">=3.10"
+# torch is NOT listed: install it per machine (cu128 locally, preinstalled on Kaggle).
+dependencies = [
+    "transformers>=4.44",
+    "accelerate",
+    "sentencepiece",
+    "protobuf",
+    "tiktoken",
+    "pandas",
+    "pyyaml",
+    "scikit-learn",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

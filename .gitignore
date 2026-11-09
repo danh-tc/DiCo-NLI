@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.egg-info/
+external/
+runs/
+wandb/
+*.zip
+.ipynb_checkpoints/
+submissions/

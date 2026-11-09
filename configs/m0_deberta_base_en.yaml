@@ -1,0 +1,5 @@
+# Baseline M0, English only. Reference (LREC 2026 pilot): F1 0.75, SoftCons 0.84, HardCons 0.79.
+name: m0_deberta_base_en
+model_name: microsoft/deberta-v3-base
+train_tracks: [1]
+eval_tracks: [1]

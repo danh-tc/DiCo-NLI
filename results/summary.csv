@@ -1,0 +1,4 @@
+name,track,decoder,weighted_f1_mean,weighted_f1_std,soft_cons_mean,soft_cons_std,hard_cons_mean,hard_cons_std,n_seeds
+m0_deberta_base_en,1,argmax,0.8238,0.0113,0.8857,0.011,0.8363,0.0163,3
+m0_deberta_base_en,1,joint,0.8188,0.0158,0.9206,0.0072,0.852,0.013,3
+m0_deberta_base_en,1,joint_structural,0.9186,0.0159,1.0,0.0,0.9025,0.0191,3
