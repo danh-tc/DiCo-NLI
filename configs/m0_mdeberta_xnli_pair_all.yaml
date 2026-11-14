@@ -6,10 +6,10 @@ train_tracks: [1, 2, 3, 4]
 eval_tracks: [1, 2, 3, 4]
 max_len: 64
 lr: 2.0e-5
-epochs: 3
+epochs: 2   # chosen on train OOF over {1,2,3} (PLAN.md, 14/11); 3 overfits the 4x multilingual repeats
 batch_size: 16
 eval_batch_size: 64
 grad_accum: 2
 pair_consistency_weight: 0.2
 # self_swap NEG bias, chosen on train OOF (runs/oof/<name>/neg_bias.json), not on dev.
-neg_bias: -10.0
+neg_bias: -8.0   # train OOF of the 2-epoch model (runs/oof/full_2ep/neg_bias.json)

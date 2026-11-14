@@ -100,6 +100,26 @@ Báo cáo kèm cận trên `pool:orig+gold` (chỉ để phân tích) và tỉ l
 - **Kết quả (14/11, 3 seed): no-go.** Bias 0, bientail_mono vs quick_base: HardCons EN −2.4, ES −2.3, EU −1.2; F1 −2.3/−1.8/−0.8. Ở bias OOF (−8.5 vs −5) vẫn thua 1.9–2.9 HardCons. bientail_all vs m0 (bias 0): HardCons −1.0/0.0/+0.6/+0.6 (EN/ES/EU/Mixed), F1 −1.1/+0.5/0.0/−0.5; ở bias OOF (−16) F1 giảm 2–5 điểm. Bất đồng EN/ES/EU tăng (26–27% vs 23.5%). Giữ làm kết quả âm: ràng buộc nhất quán theo cấu trúc không thay được đầu 4 nhãn + self_swap.
 - **Control full_1ep** (lưu ý: 4 track × 1 epoch = ít bước hơn bản mono 3 track × 3 epoch, không bằng): so với m0 (3 epoch) tốt hơn ở mọi track, HardCons +1.8/+1.3/+3.3/+2.7, F1 +0.7/+0.3/+1.0/+0.7, std nhỏ. So với quick_base: HardCons ngang (−0.3/0.0/+0.9), F1 EN thấp hơn 2.0. Kết luận: phần lớn lợi ích HardCons của bản mono đến từ việc train ít hơn (3 epoch trên 4 track là overfit vì mỗi cặp lặp lại 4 ngôn ngữ), không phải từ việc bỏ Mixed; riêng F1 EN có thể còn lợi từ mono. Việc tiếp theo: OOF + bias cho full_1ep, rồi so 1 vs 2 epoch trên train-OOF.
 - **Luật chọn số epoch** (chốt 14/11 trước khi chạy): 4 track, đầu 4 nhãn, pair-aware; ứng viên 1, 2 epoch (3 epoch = m0 đã có OOF). Mỗi ứng viên: OOF 3 fold, bias chọn trên OOF (argmax trung bình 3 metric). Chọn số epoch có objective OOF tại bias của nó cao nhất. Dev chỉ dùng để báo cáo, không dùng để chọn.
+- **Kết quả (14/11):** objective train-OOF tại bias của từng bản: 1 epoch 0.8615 (bias −3), **2 epoch 0.8622 (bias −8)**, 3 epoch 0.8605 (bias −10). Theo luật: **chọn 2 epoch, bias −8**. Chênh lệch 0.0007 nằm trong nhiễu, nên thực chất 1 và 2 epoch hoà nhau; dev (chỉ báo cáo) cũng hoà: trung bình 3 metric EN 0.891 vs 0.885, ES 0.865 vs 0.866, EU 0.847 vs 0.853, Mixed 0.846 vs 0.851 (2 vs 1 epoch). So với m0 (3 epoch, −10), bản 2 epoch: HardCons +2.4/+0.6/+2.1/+1.3, SoftCons +2.1/+1.7/+2.6/+2.0, F1 −0.2/−2.0/−1.9/−1.6 (EN/ES/EU/Mixed).
+
+## 2d. Việc tiếp theo: chạy trên Kaggle (ghi ngày 14/11, làm 15/11/2026)
+
+**Bối cảnh.** Hệ thống chính hiện tại: mDeBERTa-XNLI, pair-aware, 4 track, 2 epoch, `self_swap`, bias NEG −8 (config `m0_mdeberta_xnli_pair_all.yaml`). Dev EN (ensemble 3 seed): 0.802 / 0.971 / 0.906. Public tốt nhất không dùng artifact NEG (jhinezeal123, chỉ EN, chọn trên dev): 0.872 / 0.964 / 0.917, bằng Qwen2.5-1.5B LoRA + label smoothing 0.1 + trung bình hai chiều + nhân P(NEG) 0.8.
+
+**Phân tích lỗi (bias −8):** hơn 50% lỗi là NEG bị đoán thành có kéo theo (recall NEG: EN 36%, ES 29%, EU 20%); 27–43% là nhầm EQ với quan hệ một chiều; lỗi dồn vào các cặp thay từ cần kiến thức từ vựng (subst:none/oov khoảng 30% sai, so với add 11%).
+
+**Các bước, theo thứ tự:**
+1. **Chốt luật chọn bias trước khi chạy** (local, khoảng 1 phút): báo cáo 2 điểm vận hành, đều chọn trên train-OOF: (a) tối ưu F1 + HardCons (giống jhinezeal123, giữ NEG); (b) tối ưu trung bình 3 metric (như hiện tại). Cần thêm tuỳ chọn objective vào `scripts/tune_neg_bias.py`.
+2. **Kaggle: Qwen2.5-1.5B LoRA trên EN** (`configs/qwen_cls_en.yaml`, đã có sẵn; lần chạy local cũ chưa xong). 3 seed, decoders `[argmax, self_swap]`, lưu cả swap probs. Thêm OOF 3 fold để chọn bias. Mục tiêu: tái lập khoảng 0.86–0.87 F1 với luật safe.
+3. **Kaggle: Qwen trên ES và EU** (cùng công thức, `train_tracks` 1 track mỗi lần), để đo độ yếu ở tiếng Basque.
+4. **Stack Qwen + mDeBERTa** bằng một LR trên train-OOF, mỗi track một bộ trọng số (local, từ probs đã lưu). Trọng số theo ngôn ngữ dùng làm phân tích cho paper.
+
+**Chuẩn bị trước khi lên Kaggle:**
+- Commit, push working tree. Kiểm tra repo GitHub public hay private trước; working tree có lẫn thay đổi của agent khác.
+- Sửa ô config trong `kaggle/runner.ipynb` (đang trỏ `m0_deberta_base_en.yaml` cũ). Settings: GPU T4×2 hoặc P100, Internet On.
+- Kết quả: tải `runs.zip`, giải nén vào `runs/`, rồi chạy `scripts/overnight_report.py` (thêm nhóm `qwen_cls_en`).
+
+**Không làm:** dịch máy (đóng sau NLLB-1.3B); bientail; ép nhất quán xuyên ngôn ngữ; augment NEG (jhinezeal123 đã thử, không cải thiện).
 
 ## 3. Methods
 
