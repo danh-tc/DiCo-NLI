@@ -1,0 +1,61 @@
+﻿uid,text1,text2,my_label,notes
+a000,over Costa Concordia disaster,for costa concordia shipwreck disaster,NEGATIVE_OTHER,Ambiguous: prepositions over/for alter relation; same historical event not enough for strict phrase equivalence
+a001,in the waves,on a medium wave,NEGATIVE_OTHER,Ambiguous: in waves versus on one medium wave; number and spatial relation differ
+a002,over police violence,over police crackdown,NEGATIVE_OTHER,Police crackdown can occur without violence; not equivalent
+a003,Muslim Brotherhood Supreme Guide,Muslim Brotherhood group,NEGATIVE_OTHER,Supreme Guide is a person/role; group is organization
+a004,over Bhutto murder,In Bhutto Death,FORWARD_ENTAILMENT,Murder entails death if prepositions treated as topical; prepositional context differs
+a005,at barn animals,a sheep,NEGATIVE_OTHER,Sheep need not be at a barn; barn animals does not specify sheep
+a006,A close-up view,Close up,EQUIVALENCE,
+a007,Six people,A group of people,FORWARD_ENTAILMENT,
+a008,Two young children,Two small children,NEGATIVE_OTHER,Young denotes age; small may denote size
+a009,Southern Italy Coach Crash,in Italy coach crash,FORWARD_ENTAILMENT,
+a010,on Syria abuse,on Syrian chemical arms,NEGATIVE_OTHER,
+a011,in home museum,at his home,NEGATIVE_OTHER,Home museum does not necessarily refer to his home
+a012,Several people,People,FORWARD_ENTAILMENT,
+a013,remembered,its first memorial,NEGATIVE_OTHER,Remembering something does not imply a first memorial
+a014,Israeli forces,security forces,NEGATIVE_OTHER,Ambiguous: Israeli forces may denote military/security forces but context is missing
+a015,Super typhoon,Most powerful typhoon,NEGATIVE_OTHER,Super typhoon is a strength category; not necessarily most powerful overall
+a016,A brownish and white dog,A small orange and white dog,NEGATIVE_OTHER,Descriptions may refer to same dog but size and color not entailed
+a017,at a shoreline,on a beach,BACKWARD_ENTAILMENT,Beach normally lies at shoreline; shoreline need not be a beach; contextual
+a018,inside and black and white furry enclosure,"inside a cow-schemed , fur-covered dome",NEGATIVE_OTHER,Furry enclosure could be a dome but cow pattern is additional information
+a019,across the grassy area,through grass,FORWARD_ENTAILMENT,Crossing grassy area plausibly entails passage through grass; context-dependent
+a020,of used wooden building materials,of wooden debris,NEGATIVE_OTHER,Used timber can remain usable; debris need not be building material
+a021,Australian senator,Australian lawmaker,FORWARD_ENTAILMENT,
+a022,George Zimmerman,after Zimmerman,NEGATIVE_OTHER,Name versus after-name prepositional fragment; not equivalent
+a023,Ovadia Yosef,Rabbi Ovadia Yosef,BACKWARD_ENTAILMENT,
+a024,to speak,to deliver statement,BACKWARD_ENTAILMENT,Delivering a statement may be written; backward entailment assumes spoken delivery
+a025,a candy bar,a chocolate bar,BACKWARD_ENTAILMENT,Chocolate bar is often candy bar; not every candy bar is chocolate; usage-dependent
+a026,over Syria action,on Syria military action,BACKWARD_ENTAILMENT,Military action is a type of action; over/on are approximated as topical
+a027,on a rocky seashore,on rocks next to water,FORWARD_ENTAILMENT,Rocky seashore implies rocks by water; not conversely
+a028,on a crowded street,on a public street,NEGATIVE_OTHER,Crowded street need not be public; public street need not be crowded
+a029,A orange and white cat,A ginger and white cat,EQUIVALENCE,
+a030,on a runway,close to the ground,FORWARD_ENTAILMENT,Being on a runway implies ground-level location; meaning of close to ground contextual
+a031,one,as one,NEGATIVE_OTHER,As one implies unity or manner not merely cardinality one
+a032,on a red play structure,on a red jungle gym,BACKWARD_ENTAILMENT,
+a033,Bangladesh building disaster,Bangladesh building collapse,BACKWARD_ENTAILMENT,Building collapse often a disaster but not logically guaranteed; noisy gold risk
+a034,through the grass,through a green yard,NEGATIVE_OTHER,A green yard may not be grass; grass does not imply yard
+a035,convicted,get jail time,NEGATIVE_OTHER,Conviction does not guarantee imprisonment
+a036,Al Qaeda Hostages,for hostages,FORWARD_ENTAILMENT,Al-Qaeda hostages entails hostages if for is only topic marker
+a037,weapons that use toxic chemicals,'s chemical weapons,EQUIVALENCE,Broadly synonymous in ordinary use; toxic chemicals may include nonstandard improvised weapons
+a038,rabbi and Israeli kingmaker,kingmaker of Israeli politics,FORWARD_ENTAILMENT,Rabbi and Israeli kingmaker entails political kingmaker when same individual intended
+a039,martial arts clubs,Martial Arts Schools,NEGATIVE_OTHER,Martial-arts clubs need not be formal schools
+a040,A black vehicle,A black car,BACKWARD_ENTAILMENT,
+a041,Syria opposition unity,Syria divided opposition,NEGATIVE_OTHER,
+a042,$ 30 billion oil link,$ 25bn oil link,NEGATIVE_OTHER,Contradictory amounts 30bn vs 25bn
+a043,Nigeria lawmaker,Nigerian MP,BACKWARD_ENTAILMENT,MP is legislator; Nigerian lawmaker can be outside parliament
+a044,through green grass,in an overgrown green grassy field,NEGATIVE_OTHER,Grassy field does not ensure movement through grass; location versus path
+a045,across the snow,around the flat snowy street,NEGATIVE_OTHER,
+a046,Two Asian men and Asian woman,Two Asian men and a woman,FORWARD_ENTAILMENT,
+a047,in a field of green grass,of grassy field,EQUIVALENCE,Field of green grass versus grassy field near paraphrase; green may add specificity
+a048,The tan and white dog,The brownish and white dogs,NEGATIVE_OTHER,Singular vs plural and color specificity differ
+a049,to pro-Morsi protests,after pro-Morsi protest,NEGATIVE_OTHER,
+a050,to Cardinals,Vatican,NEGATIVE_OTHER,Cardinals can refer to ecclesiastical officials or sports team; Vatican is a place
+a051,Two cats,A white cat,NEGATIVE_OTHER,Two cats do not entail existence of a white cat
+a052,in Canada Oil Train Explosion,in Canada train crash,NEGATIVE_OTHER,Train explosion does not necessarily entail crash
+a053,onto another,to another,FORWARD_ENTAILMENT,Onto entails directed movement to a destination; context needed
+a054,Parked white double decker bus,A red and white double decker bus is parked,NEGATIVE_OTHER,White-only description may include red details; color description underdetermined
+a055,to announce,to set out,NEGATIVE_OTHER,Set out can mean explain or depart; announce not equivalent
+a056,after deadly Bangladesh building collapse,as Bangladesh building toll,NEGATIVE_OTHER,Collapse event and building toll are not same proposition; fragments incomplete
+a057,fresh election for president,fresh presidential election,EQUIVALENCE,
+a058,destroy,in destroying,EQUIVALENCE,Same verb lemma but different grammatical forms; contextual
+a059,Russia Pulled Back,of Russian Withdrawal,EQUIVALENCE,Pulled back versus withdrawal describe related event; subject/aspect not fully aligned

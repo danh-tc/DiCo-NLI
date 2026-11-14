@@ -17,6 +17,7 @@ dependencies = [
     "pandas",
     "pyyaml",
     "scikit-learn",
+    "scipy>=1.9",
 ]
 
 [tool.setuptools.packages.find]

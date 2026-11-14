@@ -9,7 +9,7 @@ configs/           base.yaml + một file YAML cho mỗi thí nghiệm
 src/dico/
   env.py           nhận biết local/Kaggle: đường dẫn, bf16/fp16, seed
   data.py          đọc CSV, nhãn, Rev(), ghép cặp đảo (rev_idx)
-  decode.py        argmax | joint | joint_structural
+  decode.py        argmax | self_swap (an toàn) | joint | joint_structural | graph_*
   evaluate.py      gọi scorer chính thức của BTC
   baselines.py     majority, rule, surface_lr (không cần GPU)
   train.py         fine-tune cross-encoder (M0) và chấm điểm trên dev
@@ -65,11 +65,30 @@ Mỗi run ghi vào `runs/<name>/seed<k>/` các file sau:
 
 ## Decoder
 
-| Decoder | Ý nghĩa |
-|---|---|
-| `argmax` | Dự đoán độc lập cho từng instance |
-| `joint` | Với mỗi cặp đảo, chọn l tối đa hoá log p(l\|A,B) + log p(Rev(l)\|B,A). Luôn cho SoftCons = 1 |
-| `joint_structural` | **Thử nghiệm.** Dùng artifact của dữ liệu: trong train/dev, chỉ các instance `NEGATIVE_OTHER` là không có cặp đảo. Phải hỏi BTC trước khi dùng cho bài nộp |
+Bài nộp chỉ dùng decoder **an toàn**: output cho một instance chỉ phụ thuộc vào text của chính nó ([PLAN.md](PLAN.md) mục 2c). `predict.py` mặc định là `self_swap` và từ chối decoder không an toàn nếu không có `--allow_unsafe`.
+
+| Decoder | An toàn | Ý nghĩa |
+|---|---|---|
+| `argmax` | Có | Dự đoán độc lập cho từng instance |
+| `self_swap` | Có | **Mặc định cho test.** Tự chạy model trên (B, A), chọn l tối đa hoá log p(l\|A,B) + log p(Rev(l)\|B,A) + `neg_bias`·[l = NEG]. Nhất quán khi đảo chiều theo thiết kế. Tune `neg_bias` trên train-OOF bằng `scripts/tune_neg_bias.py` |
+| `joint` | Không | Giống `self_swap` nhưng tra twin trong file. Chỉ để so sánh |
+| `joint_structural` | Không | Dùng artifact: trong train/dev, chỉ `NEGATIVE_OTHER` là không có twin. Chỉ để phân tích |
+| `graph_soft` | Không | Hard reversal + transitivity trên tam giác quan sát, phạt mỗi vi phạm bằng `graph_lambda` |
+| `graph_hard` | Không | Hard reversal + hard transitivity trên tam giác quan sát |
+
+Lưu ý: scorer coi NEG dự đoán trên một cặp đảo là không nhất quán, nên `self_swap`/`joint` vẫn có SoftCons < 1 nếu model đoán NEG cho cặp có twin.
+
+Graph dùng định danh node chính xác `(language, phrase)` và không tự sinh latent edge.
+Chạy `python scripts/audit_graph.py` trước khi diễn giải kết quả; nếu
+`observed_paths = 0`, hai graph decoder rút gọn chính xác về `joint`.
+
+Tune temperature và soft penalty để dùng cho test sau này bằng:
+
+```bash
+python scripts/graph_ablation.py --run runs/<name>/seed1 --track 1
+```
+
+Script đánh dấu kết quả là dev-tuned; không coi các điểm đó là held-out estimate.
 
 ## Ghi chú về dữ liệu
 

@@ -1,0 +1,15 @@
+# NLI-pretrained multilingual expert with exact direction-paired supervision.
+name: m0_mdeberta_xnli_pair_all
+model_name: MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7
+ignore_mismatched_sizes: true
+train_tracks: [1, 2, 3, 4]
+eval_tracks: [1, 2, 3, 4]
+max_len: 64
+lr: 2.0e-5
+epochs: 3
+batch_size: 16
+eval_batch_size: 64
+grad_accum: 2
+pair_consistency_weight: 0.2
+# self_swap NEG bias, chosen on train OOF (runs/oof/<name>/neg_bias.json), not on dev.
+neg_bias: -10.0

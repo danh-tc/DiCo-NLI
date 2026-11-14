@@ -1,0 +1,20 @@
+# Method 1a: m0_mdeberta_xnli_pair_all + cross-lingual agreement on verified train translations.
+# Each train row is paired with another language view of the same source pair (mono or mixed),
+# aligned with Rev() when the orientation differs; a JS term pulls the two distributions together.
+# Test time is unchanged: one row, self_swap decoding (PLAN.md 2c).
+name: xling_js_all
+model_name: MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7
+ignore_mismatched_sizes: true
+train_tracks: [1, 2, 3, 4]
+eval_tracks: [1, 2, 3, 4]
+max_len: 64
+lr: 2.0e-5
+epochs: 3
+batch_size: 16
+eval_batch_size: 64
+grad_accum: 2
+pair_consistency_weight: 0.2
+xling_consistency_weight: 0.5   # fixed a priori, not tuned on dev
+xling_mode: js
+# Same bias as the baseline so the comparison isolates the loss; re-tune on OOF before test.
+neg_bias: -10.0

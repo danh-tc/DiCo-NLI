@@ -12,4 +12,9 @@ grad_accum: 1
 warmup_ratio: 0.1
 weight_decay: 0.01
 keep_model: false          # true when you need the model for test predictions
-decoders: [argmax, joint, joint_structural]
+# Only argmax and self_swap are submission-safe (PLAN.md 2c); the rest look up other rows.
+decoders: [argmax, self_swap, joint, joint_structural, graph_soft, graph_hard]
+neg_bias: 0.0              # added to the NEG score in self_swap; tune on train OOF, never on dev
+temperature: 1.0           # fit on a separate calibration split before test inference
+graph_lambda: 1.0          # penalty per violated observed transitivity path
+graph_time_limit: 30       # seconds per connected component

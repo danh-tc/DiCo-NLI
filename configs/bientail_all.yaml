@@ -1,0 +1,18 @@
+# Idea 1 (PLAN M1): one directional function e(X => Y) = the pretrained XNLI entailment class,
+# asked for (A, B) and (B, A). The 4 labels are the cells of the table
+#   EQ = e1 e2, FWD = e1 (1-e2), BWD = (1-e1) e2, NEG = (1-e1)(1-e2)
+# trained by the joint log-likelihood of the gold cell. Reversal-consistent by construction.
+# Same backbone, data and schedule as m0_mdeberta_xnli_pair_all, so the comparison isolates
+# the output parameterisation (4-way head vs. reused entailment head).
+name: bientail_all
+method: bientail
+model_name: MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7
+train_tracks: [1, 2, 3, 4]
+eval_tracks: [1, 2, 3, 4]
+max_len: 64
+lr: 2.0e-5
+epochs: 3
+batch_size: 16
+eval_batch_size: 64
+grad_accum: 2
+neg_bias: 0.0   # tune on train OOF (scripts/tune_neg_bias.py) before comparing at a tuned bias

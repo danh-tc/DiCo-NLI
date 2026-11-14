@@ -2,3 +2,15 @@ name,track,decoder,weighted_f1_mean,weighted_f1_std,soft_cons_mean,soft_cons_std
 m0_deberta_base_en,1,argmax,0.8238,0.0113,0.8857,0.011,0.8363,0.0163,3
 m0_deberta_base_en,1,joint,0.8188,0.0158,0.9206,0.0072,0.852,0.013,3
 m0_deberta_base_en,1,joint_structural,0.9186,0.0159,1.0,0.0,0.9025,0.0191,3
+m0_mdeberta_base_all,1,argmax,0.8037,,0.8448,,0.8087,,1
+m0_mdeberta_base_all,1,joint,0.8053,,0.8953,,0.8375,,1
+m0_mdeberta_base_all,1,joint_structural,0.9203,,1.0,,0.9061,,1
+m0_mdeberta_base_all,2,argmax,0.7503,,0.8448,,0.7617,,1
+m0_mdeberta_base_all,2,joint,0.7477,,0.9061,,0.7906,,1
+m0_mdeberta_base_all,2,joint_structural,0.8813,,1.0,,0.8628,,1
+m0_mdeberta_base_all,3,argmax,0.7379,,0.8267,,0.7473,,1
+m0_mdeberta_base_all,3,joint,0.7407,,0.8736,,0.7762,,1
+m0_mdeberta_base_all,3,joint_structural,0.8781,,1.0,,0.8556,,1
+m0_mdeberta_base_all,4,argmax,0.7251,,0.8141,,0.7214,,1
+m0_mdeberta_base_all,4,joint,0.7305,,0.8869,,0.7671,,1
+m0_mdeberta_base_all,4,joint_structural,0.865,,1.0,,0.84,,1

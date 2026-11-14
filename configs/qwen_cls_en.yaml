@@ -1,0 +1,19 @@
+# Decoder LM as a 4-class classifier (LoRA), English only.
+# Public reference (jhinezeal123, dev T1, 3-seed ensemble + NEG weight 0.8): F1 0.872 / Soft 0.964 / Hard 0.917;
+# bidirectional-only, mean over seeds: F1 0.868. Our `joint` decoder ~ their bidirectional averaging.
+name: qwen_cls_en
+model_name: Qwen/Qwen2.5-1.5B
+train_tracks: [1]
+eval_tracks: [1]
+template: "Phrase A: {a}\nPhrase B: {b}\nRelation:"
+max_len: 128
+lr: 1.0e-4
+epochs: 3
+batch_size: 8
+eval_batch_size: 64
+label_smoothing: 0.1
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]

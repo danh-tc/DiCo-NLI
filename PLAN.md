@@ -55,6 +55,52 @@ M0 của mình vượt pilot (F1 0.82 so với 0.75), train mất chưa đến 1
 
 **Ý nghĩa cho N1:** một logistic regression chỉ dùng độ dài và overlap, cộng với artifact NEG, đạt F1 0.71 so với 0.75 của DeBERTa trong pilot. HardCons còn cách khoảng 0.13, và đó là phần thật sự cần đến ngữ nghĩa.
 
+## 2c. Giả định luật chơi: chọn cách an toàn nhất (14/11/2026, không hỏi BTC)
+
+Căn cứ README của BTC: EN/ES/EU là "independent monolingual tracks" (dòng 150); external resource được phép nếu ghi rõ trong paper (dòng 327); không dùng nhãn test (dòng 333).
+
+**Quy tắc cho mọi bài nộp test:** dự đoán cho một instance chỉ được phụ thuộc vào **chính text của instance đó** (cộng với model và resource bên ngoài đã train sẵn).
+
+| Kỹ thuật | Trạng thái | Lý do / thay thế |
+|---|---|---|
+| `joint_structural` (NEG khi không có twin) | **Cấm** | Khai thác cách BTC dựng file. Chỉ báo cáo như phân tích artifact (N1) |
+| `joint` / `graph_*` tra twin trong file test | **Thay bằng self-swap** | Tự chạy model trên (B, A) rồi decode argmax log p(l\|A,B) + log p(Rev(l)\|B,A). Kết quả giống `joint` trên dev nhưng không cần biết file có twin hay không |
+| Pool theo `pair_id` xuyên track / xuyên instance (`pool_views`, `learned_pool`, `evaluate_oof_pool`, `dynamic_gate`) | **Cấm ở test** | Dùng instance khác và parse `instance_id`. Thay bằng view tự sinh: dịch máy (A, B) sang ngôn ngữ khác rồi pool trên chính instance đó |
+| Train trên train/dev của mọi track, loss nhất quán theo `pair_id` trên train | Cho phép | Dữ liệu public có nhãn; ghi rõ trong paper |
+| Model pre-train NLI (MNLI/XNLI), MT (NLLB), LLM | Cho phép | Ghi rõ trong metadata và paper |
+| Chọn hyper-parameter / ensemble trên dev | Tránh | Tune trên train-OOF group theo `pair_id`; dev chỉ dùng làm held-out |
+
+Hệ quả: mọi con số "structural" và "pooled" ở trên **không còn là số của hệ thống nộp**. Mốc an toàn hiện tại là các dòng `joint` (≈ self-swap).
+
+**Luật go/no-go cho N2 (view dịch máy), chốt ngày 14/11 trước khi xem kết quả** (`scripts/mt_views_eval.py`, track EU là track chính):
+
+| Kết quả `pool:orig+mt` − `orig` | Quyết định |
+|---|---|
+| Δ HardCons ≥ +1 điểm, khoảng tin cậy 95% (paired bootstrap theo `pair_id`) không chứa 0, và F1 giảm không quá 1 điểm | Go |
+| Δ > 0 nhưng khoảng tin cậy chứa 0 | Train thêm 2 seed có lưu model; go nếu cả 3 seed đều dương |
+| Δ ≤ 0 | No-go cho phương pháp; giữ làm phân tích "dịch máy làm mất quan hệ có hướng" |
+
+Báo cáo kèm cận trên `pool:orig+gold` (chỉ để phân tích) và tỉ lệ thu hồi (mt − orig) / (gold − orig).
+
+**Kết quả lần 1 (NLLB-200-distilled-600M, 1 seed, track EU):** Δ HardCons = 0.0 [−3.8, +3.7], Δ F1 = −0.6. **No-go.** Cận trên gold: +7.6 HardCons [+4.2, +11.1], +5.5 F1. Tỉ lệ thu hồi 0%.
+**Lần 2 là lần cuối** (chốt trước khi chạy): NLLB-200-distilled-1.3B, cùng luật, cùng model NLI, cùng bias. Kết quả thế nào cũng không thử thêm model dịch nào nữa.
+**Kết quả lần 2 (NLLB-1.3B, EU):** pool:orig+mt Δ HardCons −0.7 [−4.5, +2.9], Δ F1 −3.0; orig+mt+mix tệ hơn rõ (Δ HardCons [−7.8, −0.4]). **No-go, đóng hướng dịch máy.** Cận trên gold vẫn +7.6 HardCons: thông tin nằm trong bản dịch chuẩn, MT không tái tạo được.
+
+**Phương pháp 1: consistency xuyên ngôn ngữ khi train** (`configs/xling_js_all.yaml`, `configs/xling_en_all.yaml`; chốt ngày 14/11 trước khi chạy). Dùng bản dịch chuẩn có sẵn trong train, không cần dịch máy; lúc test vẫn chỉ đọc một instance.
+- So với `m0_mdeberta_xnli_pair_all` (cùng model, cùng `pair_consistency_weight`, cùng bias −10, `self_swap`), mỗi bên 3 seed. Trọng số `xling_consistency_weight = 0.5` chốt trước, không tune trên dev.
+- Thành công nếu: HardCons trung bình 3 seed trên EU tăng ≥ +1 điểm, F1 không giảm quá 1 điểm, và tỉ lệ bất đồng giữa EN/ES/EU trên dev giảm so với mức 25% hiện tại. Báo cáo cả 4 track cùng paired bootstrap trên ensemble 3 seed.
+- Nếu `js` và `en` cùng đạt, chọn bản có trung bình 3 metric trên train-OOF cao hơn, không chọn theo dev.
+- **Kết quả bản thử nhanh** (mono, 1 seed): không có tín hiệu; bất đồng xuyên ngôn ngữ còn tăng (22.6% → 24–26%). Giả thuyết: trên train, các ngôn ngữ đã chung nhãn nên loss nhất quán gần như bằng 0. Tạm dừng.
+
+**Ý 1: đầu entailment hai chiều** (`method: bientail`, `configs/bientail_all.yaml`; chốt ngày 14/11 trước khi chạy).
+- Probe zero-shot (không train): EN F1 0.63 với luật bảng 4 ô, 0.66 với một LR nhỏ trên 6 log-prob.
+- So với đầu 4 nhãn ở cùng dữ liệu và lịch train: `bientail_mono` vs `quick_base`, `bientail_all` vs `m0_mdeberta_xnli_pair_all`; 3 seed mỗi bên; so ở bias 0 và ở bias chọn trên train-OOF (argmax trung bình 3 metric).
+- Thành công nếu HardCons trung bình 3 seed tăng ≥ +1 điểm ở ít nhất 2/3 track mono, F1 không giảm quá 1 điểm ở track nào.
+- Kèm control `full_1ep` (4 track, 1 epoch, cùng số bước với bản mono) để tách hiệu ứng "bỏ Mixed" khỏi hiệu ứng "ít bước hơn".
+- **Kết quả (14/11, 3 seed): no-go.** Bias 0, bientail_mono vs quick_base: HardCons EN −2.4, ES −2.3, EU −1.2; F1 −2.3/−1.8/−0.8. Ở bias OOF (−8.5 vs −5) vẫn thua 1.9–2.9 HardCons. bientail_all vs m0 (bias 0): HardCons −1.0/0.0/+0.6/+0.6 (EN/ES/EU/Mixed), F1 −1.1/+0.5/0.0/−0.5; ở bias OOF (−16) F1 giảm 2–5 điểm. Bất đồng EN/ES/EU tăng (26–27% vs 23.5%). Giữ làm kết quả âm: ràng buộc nhất quán theo cấu trúc không thay được đầu 4 nhãn + self_swap.
+- **Control full_1ep** (lưu ý: 4 track × 1 epoch = ít bước hơn bản mono 3 track × 3 epoch, không bằng): so với m0 (3 epoch) tốt hơn ở mọi track, HardCons +1.8/+1.3/+3.3/+2.7, F1 +0.7/+0.3/+1.0/+0.7, std nhỏ. So với quick_base: HardCons ngang (−0.3/0.0/+0.9), F1 EN thấp hơn 2.0. Kết luận: phần lớn lợi ích HardCons của bản mono đến từ việc train ít hơn (3 epoch trên 4 track là overfit vì mỗi cặp lặp lại 4 ngôn ngữ), không phải từ việc bỏ Mixed; riêng F1 EN có thể còn lợi từ mono. Việc tiếp theo: OOF + bias cho full_1ep, rồi so 1 vs 2 epoch trên train-OOF.
+- **Luật chọn số epoch** (chốt 14/11 trước khi chạy): 4 track, đầu 4 nhãn, pair-aware; ứng viên 1, 2 epoch (3 epoch = m0 đã có OOF). Mỗi ứng viên: OOF 3 fold, bias chọn trên OOF (argmax trung bình 3 metric). Chọn số epoch có objective OOF tại bias của nó cao nhất. Dev chỉ dùng để báo cáo, không dùng để chọn.
+
 ## 3. Methods
 
 ### 3.1 Phần lõi để lấy thứ hạng cao (không có novelty, nhưng bắt buộc phải làm)

@@ -1,0 +1,17 @@
+# Method 1b: like xling_js_all, but the en-en view of the same source pair is a frozen
+# teacher (KL(teacher || student)); en-en rows themselves get no extra term.
+name: xling_en_all
+model_name: MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7
+ignore_mismatched_sizes: true
+train_tracks: [1, 2, 3, 4]
+eval_tracks: [1, 2, 3, 4]
+max_len: 64
+lr: 2.0e-5
+epochs: 3
+batch_size: 16
+eval_batch_size: 64
+grad_accum: 2
+pair_consistency_weight: 0.2
+xling_consistency_weight: 0.5   # fixed a priori, not tuned on dev
+xling_mode: en
+neg_bias: -10.0
