@@ -375,6 +375,10 @@ def main() -> None:
     xling = xling_setting(cfg, pair_aware)
     train_df = load_split("train", cfg["train_tracks"])
     dev_sets = {t: add_reverse_index(load_split("dev", [t])) for t in cfg["eval_tracks"]}
+    if cfg.get("augment_transitive"):
+        from .augment import augment, text_pairs
+
+        train_df = augment(train_df, exclude=set().union(*(text_pairs(d) for d in dev_sets.values())))
     train_ds = PairDataset(train_df, tokenizer, cfg["max_len"], template, pair_aware, xling)
     dev_ds = {
         t: PairDataset(df, tokenizer, cfg["max_len"], template, pair_aware)

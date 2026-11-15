@@ -135,6 +135,10 @@ def main() -> None:
         train_idx = np.flatnonzero(row_fold != fold)
         valid_idx = np.flatnonzero(row_fold == fold)
         train_df, valid_df = df.iloc[train_idx], df.iloc[valid_idx]
+        if cfg.get("augment_transitive"):  # from this fold's train rows only, never the held-out pairs
+            from dico.augment import augment, text_pairs
+
+            train_df = augment(train_df, exclude=text_pairs(valid_df))
         print(f"\nfold={fold + 1}/{args.folds} train={len(train_df)} valid={len(valid_df)}")
         model = build_model(cfg, tokenizer, precision)
         trainer_cls, extra = trainer_setup(cfg, model)

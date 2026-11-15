@@ -38,6 +38,11 @@ for job in "$@"; do
   fi
   # KEEP_MODEL=1: save runs/<name>/seed<k>/model for test prediction (scripts/predict_final.py)
   [ "${KEEP_MODEL:-0}" = 1 ] && over+=(keep_model=true)
+  # Variants: SUFFIX is appended to the run name, EXTRA holds more key=value overrides,
+  # e.g. SUFFIX=_aug EXTRA="augment_transitive=true"
+  if [ -n "${SUFFIX:-}" ]; then name=$name$SUFFIX; over+=(name=$name); fi
+  # shellcheck disable=SC2206
+  [ -n "${EXTRA:-}" ] && over+=($EXTRA)
   if [ "$kind" = train ]; then
     cmd=(python -m dico.train --config $CFG --seed "$seed" --set "${over[@]}")
   else
