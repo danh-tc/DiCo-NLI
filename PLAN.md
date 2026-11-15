@@ -119,6 +119,12 @@ Báo cáo kèm cận trên `pool:orig+gold` (chỉ để phân tích) và tỉ l
 - Sửa ô config trong `kaggle/runner.ipynb` (đang trỏ `m0_deberta_base_en.yaml` cũ). Settings: GPU T4×2 hoặc P100, Internet On.
 - Kết quả: tải `runs.zip`, giải nén vào `runs/`, rồi chạy `scripts/overnight_report.py` (thêm nhóm `qwen_cls_en`).
 
+**Kết quả Qwen (15/11, Kaggle 2×T4, 3 seed + OOF 3 fold mỗi ngôn ngữ).** Bias chọn trên train-OOF theo cả hai objective; dev chỉ để báo cáo. Ensemble 3 seed, `self_swap`, F1 / Soft / Hard:
+- EN: bias 0: 0.866 / 0.942 / 0.903; f1_hard (−0.5): **0.870 / 0.949 / 0.910**; mean3 (−2.5): 0.850 / 0.960 / 0.917. Đạt mục tiêu bước 2 (tái lập ~0.87 F1 của jhinezeal123 mà không chọn trên dev); hơn mDeBERTa (0.802) gần 7 điểm F1 trên EN.
+- ES: hai objective cùng chọn −2.5: 0.830 / 0.982 / 0.910 (bias 0: 0.834 / 0.935 / 0.874).
+- EU: f1_hard (−2.0): 0.685 / 0.942 / 0.776; mean3 (−4.0): 0.645 / 0.986 / 0.798. EU kém EN ~18 điểm F1; bias âm hại F1 EU nhiều hơn.
+- Bước 4 (stack) cần probs dev + train-OOF của mDeBERTa, không có trên máy Linux → chạy lại `m0_mdeberta_xnli_pair_all` trên Kaggle (`train:main:{1,2,3}`, `oof:main`).
+
 **Không làm:** dịch máy (đóng sau NLLB-1.3B); bientail; ép nhất quán xuyên ngôn ngữ; augment NEG (jhinezeal123 đã thử, không cải thiện).
 
 ## 3. Methods

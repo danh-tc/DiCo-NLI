@@ -39,6 +39,9 @@ GROUPS = [
     ("bientail_all", "bi-entailment head, train 4 tracks"),
     ("quick_js", "xling js, mono (method 1, 1 seed)"),
     ("quick_en", "xling en-teacher, mono (method 1, 1 seed)"),
+    ("qwen_cls_en", "Qwen2.5-1.5B LoRA, 4-label head, train EN only (Kaggle)"),
+    ("qwen_cls_es", "Qwen2.5-1.5B LoRA, 4-label head, train ES only (Kaggle)"),
+    ("qwen_cls_eu", "Qwen2.5-1.5B LoRA, 4-label head, train EU only (Kaggle)"),
 ]
 LANG = {1: "en", 2: "es", 3: "eu", 4: "mixed"}
 METRICS = ("weighted_f1", "soft_cons", "hard_cons")
