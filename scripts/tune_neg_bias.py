@@ -48,8 +48,18 @@ def local_metrics(df: pd.DataFrame, pred: list[str]) -> dict[str, float]:
     }
 
 
-def objective(m: dict[str, float]) -> float:
-    return (m["weighted_f1"] + m["soft_cons"] + m["hard_cons"]) / 3
+OBJECTIVES = {
+    # mean of the three official scores (our default operating point)
+    "mean3": (lambda m: (m["weighted_f1"] + m["soft_cons"] + m["hard_cons"]) / 3,
+              "argmax of mean(F1, SoftCons, HardCons) on train OOF", "neg_bias.json"),
+    # F1 + HardCons, as in the strongest public system (keeps more NEG predictions)
+    "f1_hard": (lambda m: (m["weighted_f1"] + m["hard_cons"]) / 2,
+                "argmax of mean(F1, HardCons) on train OOF", "neg_bias_f1hard.json"),
+}
+
+
+def objective(m: dict[str, float], name: str = "mean3") -> float:
+    return OBJECTIVES[name][0](m)
 
 
 def main() -> None:
@@ -61,7 +71,10 @@ def main() -> None:
     ap.add_argument("--fixed", type=float,
                     help="use this bias (picked by hand from the OOF curve, before looking at dev)")
     ap.add_argument("--set", nargs="*", default=[], help="config overrides, as in dico.train")
+    ap.add_argument("--objective", choices=sorted(OBJECTIVES), default="mean3",
+                    help="operating point; both are pre-registered in PLAN.md (2d)")
     args = ap.parse_args()
+    _, rule_text, json_name = OBJECTIVES[args.objective]
 
     cfg = load_config(args.config, args.set)
     oof_dir = args.oof or ROOT / "runs" / "oof" / cfg["name"]
@@ -84,22 +97,23 @@ def main() -> None:
         row = {"neg_bias": float(bias)}
         for key in ("weighted_f1", "soft_cons", "hard_cons"):
             row[key] = float(np.mean([m[key] for m in per.values()]))
-        row["objective"] = objective(row)
+        row["objective"] = objective(row, args.objective)
         table.append(row)
     table = pd.DataFrame(table)
     best = table.loc[table.objective.idxmax()]
     zero = table.loc[(table.neg_bias - 0.0).abs().idxmin()]
-    table.to_csv(oof_dir / "neg_bias_grid.csv", index=False)
+    table.to_csv(oof_dir / json_name.replace(".json", "_grid.csv"), index=False)
     if args.fixed is None:
-        chosen, rule = best, "argmax of mean(F1, SoftCons, HardCons) on train OOF"
+        chosen, rule = best, rule_text
     else:
         chosen = table.loc[(table.neg_bias - args.fixed).abs().idxmin()]
         rule = (f"fixed at {args.fixed} from the train-OOF curve (near-best objective, "
                 "further from the NEG-collapse cliff); dev not consulted")
     choice = {"neg_bias": float(chosen.neg_bias), "train_oof_at_choice": chosen.to_dict(),
               "train_oof_at_best": best.to_dict(), "train_oof_at_zero": zero.to_dict(),
-              "selected_on": "train OOF (grouped by pair_id)", "rule": rule}
-    save_json(choice, oof_dir / "neg_bias.json")
+              "selected_on": "train OOF (grouped by pair_id)", "rule": rule,
+              "objective": args.objective}
+    save_json(choice, oof_dir / json_name)
     print("train OOF (mean over tracks)")
     print(pd.DataFrame([zero, best, chosen], index=["bias=0", "best", "chosen"]).round(4).to_string())
 
@@ -118,7 +132,7 @@ def main() -> None:
             results.append({"seed": seed_dir.name, "neg_bias": choice["neg_bias"], **row})
     if results:
         out = pd.DataFrame(results)
-        out.to_csv(args.runs / "self_swap_negbias_dev.csv", index=False)
+        out.to_csv(args.runs / json_name.replace("neg_bias", "self_swap_negbias_dev").replace(".json", ".csv"), index=False)
         cols = ["weighted_f1", "soft_cons", "hard_cons"]
         print("\ndev (held-out), self_swap + train-OOF neg_bias")
         print(out.groupby("track")[cols].agg(["mean", "std"]).round(4).to_string())
