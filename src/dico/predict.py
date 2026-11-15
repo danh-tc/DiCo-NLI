@@ -12,13 +12,12 @@ plus the `score` head, and the base model is loaded from config.yaml's model_nam
 from __future__ import annotations
 
 import argparse
-import tempfile
 from pathlib import Path
 
 import numpy as np
 import torch
 import yaml
-from transformers import AutoModelForSequenceClassification, AutoTokenizer, DataCollatorWithPadding, Trainer, TrainingArguments
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, DataCollatorWithPadding
 
 from . import env
 from .data import LABEL2ID, LABELS, read_csv
@@ -50,24 +49,36 @@ def load_run(run_dir: Path, prec: str):
 
 
 @torch.no_grad()
+def logits_of(model, tok, ds, batch_size: int, prec: str) -> np.ndarray:
+    """Forward pass in order, under the same autocast as training (half-precision base, fp32
+    LoRA/head: without autocast the fp32 head gets fp16 hidden states and fails)."""
+    device = next(model.parameters()).device
+    dtype = {"bf16": torch.bfloat16, "fp16": torch.float16}.get(prec)
+    loader = torch.utils.data.DataLoader(ds, batch_size=batch_size, shuffle=False,
+                                         collate_fn=DataCollatorWithPadding(tok))
+    out = []
+    for batch in loader:
+        batch = {k: v.to(device) for k, v in batch.items()}
+        with torch.autocast(device_type=device.type, dtype=dtype or torch.float32, enabled=dtype is not None):
+            out.append(model(**batch).logits.float().cpu().numpy())
+    return np.concatenate(out)
+
+
 def predict_run(run_dir: Path, dfs: list, batch_size: int | None = None) -> list[tuple[np.ndarray, np.ndarray]]:
     """[(probs, swap_probs)] of one saved run on each df (columns text1, text2); loads the model once."""
     prec = env.precision()
     cfg, tok, model = load_run(Path(run_dir), prec)
+    model.to("cuda" if torch.cuda.is_available() else "cpu")
+    bs = batch_size or cfg.get("eval_batch_size", 64)
     results = []
-    with tempfile.TemporaryDirectory() as tmp:
-        args = TrainingArguments(
-            output_dir=tmp, per_device_eval_batch_size=batch_size or cfg.get("eval_batch_size", 64),
-            bf16=prec == "bf16", fp16=prec == "fp16", report_to="none", dataloader_num_workers=0)
-        trainer = Trainer(model=model, args=args, data_collator=DataCollatorWithPadding(tok))
-        for df in dfs:
-            out = []
-            for view in (df, swap_texts(df)):
-                ds = PairDataset(view.drop(columns=["label"], errors="ignore"), tok, cfg["max_len"],
-                                 cfg.get("template"), pair_aware=False)
-                out.append(softmax(trainer.predict(ds).predictions))
-            results.append((out[0], out[1]))
-    del model, trainer
+    for df in dfs:
+        out = []
+        for view in (df, swap_texts(df)):
+            ds = PairDataset(view.drop(columns=["label"], errors="ignore"), tok, cfg["max_len"],
+                             cfg.get("template"), pair_aware=False)
+            out.append(softmax(logits_of(model, tok, ds, bs, prec)))
+        results.append((out[0], out[1]))
+    del model
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     return results
