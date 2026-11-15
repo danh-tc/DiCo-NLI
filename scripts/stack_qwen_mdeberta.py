@@ -29,6 +29,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from dico.data import LABEL2ID, LABELS, NEG, add_reverse_index, load_split  # noqa: E402
 from dico.decode import self_swap_scores  # noqa: E402
+from dico.evaluate import predict_and_score  # noqa: E402
 from tune_neg_bias import OBJECTIVES, local_metrics  # noqa: E402
 
 MDEB = "m0_mdeberta_xnli_pair_all"
@@ -136,6 +137,15 @@ def main() -> None:
                 lines.append(f"{lang} {obj}: stack - qwen  " + "  ".join(
                     f"{m} {v['mean']:+.4f} [{v['ci95'][0]:+.4f}, {v['ci95'][1]:+.4f}] P>0={v['p_gt0']:.2f}"
                     for m, v in bs.items()))
+
+            if obj == "mean3":  # main system (PLAN.md 2d): write + score with the official scorer
+                predict_and_score(dev, preds["stack"], "dev", t, args.out, "main")
+
+    # Track 4 (Mixed): no Qwen model, mDeBERTa alone at its train-OOF bias (mean3).
+    mdeb_bias = json.loads((ROOT / "runs" / "oof" / MDEB / "neg_bias.json").read_text())["neg_bias"]
+    dev4 = add_reverse_index(load_split("dev", [4]).reset_index(drop=True))
+    s4 = dev_scores(MDEB, 4)
+    predict_and_score(dev4, decode(s4, s4, 0.0, mdeb_bias), "dev", 4, args.out, "main")
 
     table = pd.DataFrame(report)
     table.to_csv(args.out / "summary.csv", index=False)
