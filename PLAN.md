@@ -133,6 +133,10 @@ Báo cáo kèm cận trên `pool:orig+gold` (chỉ để phân tích) và tỉ l
 - **f1_hard:** stack không hơn Qwen ở EN (F1 −0.6, P>0 0.20), ES mất SoftCons −3.6; EU vẫn +10.6 F1.
 - Trọng số theo ngôn ngữ (cho paper): EN/ES nghiêng Qwen (0.75–0.80), EU nghiêng mDeBERTa (0.40): Qwen yếu tiếng Basque, mDeBERTa (pre-train XNLI đa ngữ, train 4 track) bù.
 - **Chốt:** hệ thống chính track 1–3 = stack mean3; track 4 = mDeBERTa một mình (chưa có Qwen cho Mixed).
+- CodaBench dev (15/11, `dev_stack_main.zip`): khớp scorer local; macro 4 track F1/Soft/Hard 0.801/0.974/0.889 (safe cũ: 0.756/0.979/0.870). Hai lần nộp 14/11 có F1 cao hơn (0.830, 0.819) dùng pool theo pair_id, cấm ở test (2c), chỉ để phân tích.
+
+**Thí nghiệm kế tiếp: Qwen train trên 4 track (chốt 15/11, trước khi chạy).** `configs/qwen_cls_all.yaml`: cùng công thức Qwen, train/eval 4 track, **1 epoch** (4 track ≈ 9× số dòng một track; 1 epoch ≈ 3× số bước của bản đơn ngữ 3 epoch; mDeBERTa overfit ở 3 epoch trên 4 track). Kaggle: 3 seed + OOF 3 fold.
+- **Luật:** mỗi track EN/ES/EU, stack với `qwen_cls_all` thay cho Qwen đơn ngữ nếu objective mean3 trên train-OOF (tại (w, bias) tốt nhất của nó) cao hơn stack hiện tại; ngược lại giữ. Track Mixed: dùng stack (`qwen_cls_all` + mDeBERTa) nếu objective OOF cao hơn mDeBERTa một mình. Không xét stack 3 model. Dev chỉ báo cáo.
 
 **Không làm:** dịch máy (đóng sau NLLB-1.3B); bientail; ép nhất quán xuyên ngôn ngữ; augment NEG (jhinezeal123 đã thử, không cải thiện).
 

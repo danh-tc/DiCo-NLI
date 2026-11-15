@@ -1,0 +1,20 @@
+# Qwen2.5-1.5B LoRA, 4-label head, trained on all 4 tracks (one multilingual model).
+# Same recipe as qwen_cls_en.yaml except tracks and epochs: 4 tracks = ~9x the rows of one
+# mono track, so 1 epoch ~ 3x the steps of the 3-epoch mono run (mDeBERTa overfit at 3 epochs
+# on 4 tracks, PLAN.md 14/11). Chosen before running; not tuned on dev.
+name: qwen_cls_all
+model_name: Qwen/Qwen2.5-1.5B
+train_tracks: [1, 2, 3, 4]
+eval_tracks: [1, 2, 3, 4]
+template: "Phrase A: {a}\nPhrase B: {b}\nRelation:"
+max_len: 128
+lr: 1.0e-4
+epochs: 1
+batch_size: 8
+eval_batch_size: 64
+label_smoothing: 0.1
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]

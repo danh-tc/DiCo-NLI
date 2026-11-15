@@ -6,6 +6,7 @@
 #   JOB = train:<target>:<seed> | oof:<target>
 #   target = en | es | eu   Qwen2.5-1.5B LoRA on that track only (configs/qwen_cls_en.yaml)
 #          | main           main system, 4 tracks (configs/m0_mdeberta_xnli_pair_all.yaml, as is)
+#          | <config>       any configs/<config>.yaml, as is (e.g. qwen_cls_all)
 #
 # Each job logs to $RUNS/logs/<gpu>_<job>.log; a failed job does not stop the queue.
 # Progress: $RUNS/logs/status.txt.
@@ -24,6 +25,10 @@ for job in "$@"; do
   if [ "$target" = main ]; then
     CFG=configs/m0_mdeberta_xnli_pair_all.yaml
     name=m0_mdeberta_xnli_pair_all
+    over=("decoders=[argmax,self_swap]")
+  elif [ -f "configs/$target.yaml" ]; then
+    CFG=configs/$target.yaml
+    name=$target
     over=("decoders=[argmax,self_swap]")
   else
     CFG=configs/qwen_cls_en.yaml
