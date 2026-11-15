@@ -125,6 +125,15 @@ Báo cáo kèm cận trên `pool:orig+gold` (chỉ để phân tích) và tỉ l
 - EU: f1_hard (−2.0): 0.685 / 0.942 / 0.776; mean3 (−4.0): 0.645 / 0.986 / 0.798. EU kém EN ~18 điểm F1; bias âm hại F1 EU nhiều hơn.
 - Bước 4 (stack) cần probs dev + train-OOF của mDeBERTa, không có trên máy Linux → chạy lại `m0_mdeberta_xnli_pair_all` trên Kaggle (`train:main:{1,2,3}`, `oof:main`).
 
+**mDeBERTa chạy lại trên Kaggle (15/11, fp16, 24 phút):** tái lập bản local: objective train-OOF 0.8614 ở bias −6 (local bf16: 0.8622 ở −8, trong nhiễu). Dev 3 seed ở −6 (F1/Soft/Hard): EN 0.819/0.950/0.887, ES 0.782/0.958/0.863, EU 0.750/0.953/0.838, Mixed 0.745/0.952/0.822. Config vẫn để −8.
+
+**Stack Qwen + mDeBERTa (15/11, `scripts/stack_qwen_mdeberta.py`).** Mỗi track: `w·S_qwen + (1−w)·S_mdeb + neg_bias·[NEG]`, S = score self_swap của từng model (submission-safe). (w, bias) chọn trên train-OOF theo hai objective đã chốt; thay cho LR trong kế hoạch vì grid tối ưu thẳng metric của task, cùng luật với chọn bias. Dev = ensemble 3 seed, chỉ báo cáo. Bootstrap ghép cặp theo pair_id, 1000 lần.
+- **mean3** (F1/Soft/Hard): EN **0.867/0.968/0.931** (w=0.80, −2.5) vs Qwen 0.850/0.960/0.917, mDeB 0.816/0.953/0.895; ES **0.832/0.982/0.917** (w=0.75, −3.0) vs Qwen 0.830/0.982/0.910; EU **0.760/0.982/0.874** (w=0.40, −5.0) vs Qwen 0.645/0.986/0.798, mDeB 0.752/0.968/0.848.
+- Stack − Qwen (mean3): EU F1 +11.5 [+6.7, +16.1], Hard +7.6 [+2.8, +12.5]; EN F1 +1.7 [−0.1, +3.7] (P>0 0.97), Hard +1.5 [0.0, +3.4]; ES hoà.
+- **f1_hard:** stack không hơn Qwen ở EN (F1 −0.6, P>0 0.20), ES mất SoftCons −3.6; EU vẫn +10.6 F1.
+- Trọng số theo ngôn ngữ (cho paper): EN/ES nghiêng Qwen (0.75–0.80), EU nghiêng mDeBERTa (0.40): Qwen yếu tiếng Basque, mDeBERTa (pre-train XNLI đa ngữ, train 4 track) bù.
+- **Chốt:** hệ thống chính track 1–3 = stack mean3; track 4 = mDeBERTa một mình (chưa có Qwen cho Mixed).
+
 **Không làm:** dịch máy (đóng sau NLLB-1.3B); bientail; ép nhất quán xuyên ngôn ngữ; augment NEG (jhinezeal123 đã thử, không cải thiện).
 
 ## 3. Methods
