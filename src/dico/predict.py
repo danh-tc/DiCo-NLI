@@ -1,90 +1,89 @@
-"""Predict any DiCo-NLI CSV (e.g. the test set) with a saved model (needs keep_model: true).
+"""Class probabilities from a saved run (needs keep_model: true), for any DiCo-NLI CSV.
 
-    python -m dico.predict --model_dir runs/<name>/seed1/model --input test.csv --output preds.csv
+A run dir is runs/<name>/seed<k>/ with config.yaml and model/. The input is encoded exactly as in
+training (PairDataset with the run's template and max_len); only the (A, B) view is fed, so no
+labels are needed (test files are unlabeled). Encoders are saved whole; LoRA runs save the adapter
+plus the `score` head, and the base model is loaded from config.yaml's model_name.
 
-Default decoder is self_swap: each row is decoded from its own text only (PLAN.md 2c).
+    python -m dico.predict --run runs/qwen_cls_en/seed1 --input test_track1.csv --out probs/
+    -> probs/<input stem>_probs.npy and <input stem>_swap_probs.npy (p(.|B,A), for self_swap)
 """
 
 from __future__ import annotations
 
 import argparse
+import tempfile
 from pathlib import Path
 
 import numpy as np
 import torch
-from transformers import AutoModelForSequenceClassification, AutoTokenizer, DataCollatorWithPadding
+import yaml
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, DataCollatorWithPadding, Trainer, TrainingArguments
 
-from .data import add_reverse_index, read_csv
-from .decode import DECODERS, NEEDS_SWAP, SAFE_DECODERS, decode, swap_texts
-from .evaluate import write_predictions
+from . import env
+from .data import LABEL2ID, LABELS, read_csv
+from .decode import swap_texts
+from .train import PairDataset, softmax
+
+
+def load_run(run_dir: Path, prec: str):
+    cfg = yaml.safe_load((run_dir / "config.yaml").read_text(encoding="utf-8"))
+    model_dir = run_dir / "model"
+    tok = AutoTokenizer.from_pretrained(model_dir)
+    if tok.pad_token is None:
+        tok.pad_token = tok.eos_token
+    if cfg.get("lora"):
+        from peft import PeftModel
+
+        dtype = {"bf16": torch.bfloat16, "fp16": torch.float16}.get(prec, torch.float32)
+        base = AutoModelForSequenceClassification.from_pretrained(
+            cfg["model_name"], dtype=dtype, num_labels=len(LABELS),
+            id2label=dict(enumerate(LABELS)), label2id=LABEL2ID)
+        base.config.pad_token_id = tok.pad_token_id
+        model = PeftModel.from_pretrained(base, model_dir)
+        for name, p in model.named_parameters():  # as in training: LoRA + score head in fp32
+            if "lora_" in name or "modules_to_save" in name:
+                p.data = p.data.float()
+    else:
+        model = AutoModelForSequenceClassification.from_pretrained(model_dir).float()
+    return cfg, tok, model.eval()
 
 
 @torch.no_grad()
-def predict_probs(model_dirs: list[str], df, max_len: int = 64, batch_size: int = 128) -> np.ndarray:
-    """Average softmax probabilities over one or more models (simple ensemble)."""
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    total = None
-    for model_dir in model_dirs:
-        tok = AutoTokenizer.from_pretrained(model_dir)
-        model = AutoModelForSequenceClassification.from_pretrained(model_dir).float().to(device).eval()
-        collate = DataCollatorWithPadding(tok)
-
-        def logits_of(a, b):
-            enc = tok(list(a), list(b), truncation=True, max_length=max_len)
+def predict_run(run_dir: Path, dfs: list, batch_size: int | None = None) -> list[tuple[np.ndarray, np.ndarray]]:
+    """[(probs, swap_probs)] of one saved run on each df (columns text1, text2); loads the model once."""
+    prec = env.precision()
+    cfg, tok, model = load_run(Path(run_dir), prec)
+    results = []
+    with tempfile.TemporaryDirectory() as tmp:
+        args = TrainingArguments(
+            output_dir=tmp, per_device_eval_batch_size=batch_size or cfg.get("eval_batch_size", 64),
+            bf16=prec == "bf16", fp16=prec == "fp16", report_to="none", dataloader_num_workers=0)
+        trainer = Trainer(model=model, args=args, data_collator=DataCollatorWithPadding(tok))
+        for df in dfs:
             out = []
-            for s in range(0, len(df), batch_size):
-                idx = range(s, min(s + batch_size, len(df)))
-                batch = collate([{k: v[i] for k, v in enc.items()} for i in idx])
-                with torch.autocast(device, enabled=device == "cuda"):
-                    out.append(model(**{k: v.to(device) for k, v in batch.items()}).logits.float())
-            return torch.cat(out)
-
-        if getattr(model.config, "dico_method", "m0") == "bientail":
-            # e(A=>B) and e(B=>A) from the NLI head, combined into the 4 labels.
-            from .train import bientail_scores
-
-            scores = bientail_scores(logits_of(df.text1, df.text2), logits_of(df.text2, df.text1),
-                                     model.config.dico_entail_index)
-        else:
-            scores = logits_of(df.text1, df.text2)
-        probs = torch.softmax(scores, -1).cpu().numpy()
-        total = probs if total is None else total + probs
-    return total / len(model_dirs)
+            for view in (df, swap_texts(df)):
+                ds = PairDataset(view.drop(columns=["label"], errors="ignore"), tok, cfg["max_len"],
+                                 cfg.get("template"), pair_aware=False)
+                out.append(softmax(trainer.predict(ds).predictions))
+            results.append((out[0], out[1]))
+    del model, trainer
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    return results
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model_dir", nargs="+", required=True, help="one or more dirs (ensemble)")
-    ap.add_argument("--input", required=True)
-    ap.add_argument("--output", required=True)
-    ap.add_argument("--decoder", default="self_swap", choices=list(DECODERS))
-    ap.add_argument("--allow_unsafe", action="store_true",
-                    help="allow decoders that look up other rows of the input (analysis only)")
-    ap.add_argument("--max_len", type=int, default=64)
-    ap.add_argument("--neg_bias", type=float, default=0.0, help="tuned on train OOF (tune_neg_bias.py)")
-    ap.add_argument("--temperature", type=float, default=1.0)
-    ap.add_argument("--graph_lambda", type=float, default=1.0)
-    ap.add_argument("--graph_time_limit", type=float)
+    ap.add_argument("--run", type=Path, required=True, help="runs/<name>/seed<k> with model/")
+    ap.add_argument("--input", type=Path, required=True)
+    ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
-    if args.decoder not in SAFE_DECODERS and not args.allow_unsafe:
-        ap.error(f"{args.decoder} looks up other instances; use one of {SAFE_DECODERS} "
-                 "or pass --allow_unsafe (not for submissions, see PLAN.md 2c)")
-
-    df = read_csv(args.input)
-    if args.decoder not in SAFE_DECODERS:
-        df = add_reverse_index(df)
-    probs = predict_probs(args.model_dir, df, args.max_len)
-    probs_swap = None
-    if args.decoder in NEEDS_SWAP:
-        probs_swap = predict_probs(args.model_dir, swap_texts(df), args.max_len)
-    config = {
-        "neg_bias": args.neg_bias,
-        "temperature": args.temperature,
-        "graph_lambda": args.graph_lambda,
-        "graph_time_limit": args.graph_time_limit,
-    }
-    write_predictions(df, decode(args.decoder, df, probs, config, probs_swap), Path(args.output))
-    print(f"wrote {len(df)} predictions to {args.output}")
+    [(probs, swap)] = predict_run(args.run, [read_csv(args.input)])
+    args.out.mkdir(parents=True, exist_ok=True)
+    np.save(args.out / f"{args.input.stem}_probs.npy", probs)
+    np.save(args.out / f"{args.input.stem}_swap_probs.npy", swap)
+    print(f"wrote probs for {len(probs)} rows to {args.out}")
 
 
 if __name__ == "__main__":

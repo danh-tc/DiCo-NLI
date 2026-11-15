@@ -36,6 +36,8 @@ for job in "$@"; do
     name=qwen_cls_$target
     over=(name=$name "train_tracks=[$t]" "eval_tracks=[$t]" "decoders=[argmax,self_swap]")
   fi
+  # KEEP_MODEL=1: save runs/<name>/seed<k>/model for test prediction (scripts/predict_final.py)
+  [ "${KEEP_MODEL:-0}" = 1 ] && over+=(keep_model=true)
   if [ "$kind" = train ]; then
     cmd=(python -m dico.train --config $CFG --seed "$seed" --set "${over[@]}")
   else

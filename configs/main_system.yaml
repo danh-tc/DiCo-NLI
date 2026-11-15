@@ -1,0 +1,10 @@
+# Main system (PLAN.md 2d). Per track: argmax_l w*S_qwen + (1-w)*S_mdeb + neg_bias*[l=NEG],
+# S = self_swap score of the 3-seed ensemble (mean probs). (w, neg_bias) chosen on train OOF,
+# objective mean3 (runs/stack_qwen_mdeberta*/choices.json); never tuned on dev.
+mdeberta: m0_mdeberta_xnli_pair_all
+seeds: [1, 2, 3]
+tracks:
+  1: {qwen: qwen_cls_en, w_qwen: 0.8, neg_bias: -2.5}
+  2: {qwen: qwen_cls_es, w_qwen: 0.75, neg_bias: -3.0}
+  3: {qwen: qwen_cls_eu, w_qwen: 0.4, neg_bias: -5.0}
+  4: {qwen: qwen_cls_all, w_qwen: 0.5, neg_bias: -4.5}
