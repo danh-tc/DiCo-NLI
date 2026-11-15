@@ -137,6 +137,9 @@ Báo cáo kèm cận trên `pool:orig+gold` (chỉ để phân tích) và tỉ l
 
 **Thí nghiệm kế tiếp: Qwen train trên 4 track (chốt 15/11, trước khi chạy).** `configs/qwen_cls_all.yaml`: cùng công thức Qwen, train/eval 4 track, **1 epoch** (4 track ≈ 9× số dòng một track; 1 epoch ≈ 3× số bước của bản đơn ngữ 3 epoch; mDeBERTa overfit ở 3 epoch trên 4 track). Kaggle: 3 seed + OOF 3 fold.
 - **Luật:** mỗi track EN/ES/EU, stack với `qwen_cls_all` thay cho Qwen đơn ngữ nếu objective mean3 trên train-OOF (tại (w, bias) tốt nhất của nó) cao hơn stack hiện tại; ngược lại giữ. Track Mixed: dùng stack (`qwen_cls_all` + mDeBERTa) nếu objective OOF cao hơn mDeBERTa một mình. Không xét stack 3 model. Dev chỉ báo cáo.
+- **Kết quả (15/11, Kaggle 51 phút cho 3 seed, OOF 36 phút).** Một mình, Qwen 4 track yếu hơn Qwen đơn ngữ (self_swap bias 0, từng seed: EN ~0.83 vs 0.854, ES ~0.79 vs 0.812, EU ~0.67 vs 0.689). Objective OOF mean3 của stack: EN 0.8941 vs **0.9021** (đơn ngữ), ES 0.8913 vs **0.8977**, EU 0.8614 vs **0.8617** → **giữ Qwen đơn ngữ** cho track 1–3. Mixed: stack (`qwen_cls_all` + mDeB, w=0.50, −4.5) **0.8529** vs mDeB một mình 0.8455 → **dùng stack cho Mixed**. Dev Mixed: 0.740/0.976/0.851 (trước: mDeB ở −6, 0.744/0.965/0.836).
+- **Hệ thống chính mới:** track 1–3 = stack Qwen đơn ngữ + mDeB (mean3); track 4 = stack Qwen 4 track + mDeB (mean3). Dev macro 4 track: 0.800/0.977/0.893 (`submissions/dev_stack_main_v2.zip`).
+- Đọc cho paper: một model Qwen chung cho 4 track không thay được model riêng từng ngôn ngữ (đa ngữ làm loãng ở model 1.5B), nhưng là cách duy nhất có Qwen cho Mixed, và ở đó stack thêm +1.5 HardCons.
 
 **Không làm:** dịch máy (đóng sau NLLB-1.3B); bientail; ép nhất quán xuyên ngôn ngữ; augment NEG (jhinezeal123 đã thử, không cải thiện).
 

@@ -33,7 +33,7 @@ from dico.evaluate import predict_and_score  # noqa: E402
 from tune_neg_bias import OBJECTIVES, local_metrics  # noqa: E402
 
 MDEB = "m0_mdeberta_xnli_pair_all"
-LANG = {1: "en", 2: "es", 3: "eu"}
+LANG = {1: "en", 2: "es", 3: "eu", 4: "mixed"}
 METRICS = ("weighted_f1", "soft_cons", "hard_cons")
 
 
@@ -91,6 +91,9 @@ def main() -> None:
     ap.add_argument("--grid", type=float, nargs=3, default=[-20.0, 2.0, 0.5], metavar=("LO", "HI", "STEP"))
     ap.add_argument("--bootstrap", type=int, default=1000)
     ap.add_argument("--seed", type=int, default=73)
+    ap.add_argument("--qwen", default="qwen_cls_{lang}",
+                    help="Qwen run name; {lang} = en/es/eu/mixed (e.g. qwen_cls_all for the 4-track model)")
+    ap.add_argument("--tracks", type=int, nargs="+", default=[1, 2, 3])
     ap.add_argument("--out", type=Path, default=ROOT / "runs" / "stack_qwen_mdeberta")
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
@@ -99,8 +102,9 @@ def main() -> None:
     biases = np.round(np.arange(lo, hi + step / 2, step), 6)
 
     report, choices, lines = [], {}, []
-    for t, lang in LANG.items():
-        qwen = f"qwen_cls_{lang}"
+    for t in args.tracks:
+        lang = LANG[t]
+        qwen = args.qwen.format(lang=lang)
         train = add_reverse_index(load_split("train", [t]).reset_index(drop=True))
         sq, sm = oof_scores(qwen, train), oof_scores(MDEB, train)
         grid = []
@@ -141,11 +145,12 @@ def main() -> None:
             if obj == "mean3":  # main system (PLAN.md 2d): write + score with the official scorer
                 predict_and_score(dev, preds["stack"], "dev", t, args.out, "main")
 
-    # Track 4 (Mixed): no Qwen model, mDeBERTa alone at its train-OOF bias (mean3).
-    mdeb_bias = json.loads((ROOT / "runs" / "oof" / MDEB / "neg_bias.json").read_text())["neg_bias"]
-    dev4 = add_reverse_index(load_split("dev", [4]).reset_index(drop=True))
-    s4 = dev_scores(MDEB, 4)
-    predict_and_score(dev4, decode(s4, s4, 0.0, mdeb_bias), "dev", 4, args.out, "main")
+    # Track 4 (Mixed) without a Qwen model: mDeBERTa alone at its train-OOF bias (mean3).
+    if 4 not in args.tracks:
+        mdeb_bias = json.loads((ROOT / "runs" / "oof" / MDEB / "neg_bias.json").read_text())["neg_bias"]
+        dev4 = add_reverse_index(load_split("dev", [4]).reset_index(drop=True))
+        s4 = dev_scores(MDEB, 4)
+        predict_and_score(dev4, decode(s4, s4, 0.0, mdeb_bias), "dev", 4, args.out, "main")
 
     table = pd.DataFrame(report)
     table.to_csv(args.out / "summary.csv", index=False)
