@@ -149,7 +149,8 @@ def main() -> None:
         train_df = train_df.reset_index(drop=True)
         bias = poe_bias(cfg, train_df, pair_aware)
         # Folds group whole pair_ids, so every cross-lingual partner stays in the same fold.
-        train_ds = PairDataset(train_df, tokenizer, cfg["max_len"], template, pair_aware, xling, bias)
+        diff = bool(cfg.get("diff_input"))
+        train_ds = PairDataset(train_df, tokenizer, cfg["max_len"], template, pair_aware, xling, bias, diff)
         trainer = trainer_cls(
             model=model,
             args=training_args(cfg, out / f"fold{fold}", fold_seed, precision, pair_aware),
@@ -160,7 +161,7 @@ def main() -> None:
         t0 = time.time()
         trainer.train()
         for frame, target in ((valid_df, oof), (swap_texts(valid_df), oof_swap)):
-            ds = PairDataset(frame, tokenizer, cfg["max_len"], template, pair_aware)
+            ds = PairDataset(frame, tokenizer, cfg["max_len"], template, pair_aware, diff_input=diff)
             pred = trainer.predict(ds).predictions
             target[valid_idx] = softmax(np.asarray(pred)).astype(np.float32)
         fold_reports.append({

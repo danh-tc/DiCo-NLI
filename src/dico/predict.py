@@ -75,7 +75,8 @@ def predict_run(run_dir: Path, dfs: list, batch_size: int | None = None) -> list
         out = []
         for view in (df, swap_texts(df)):
             ds = PairDataset(view.drop(columns=["label"], errors="ignore"), tok, cfg["max_len"],
-                             cfg.get("template"), pair_aware=False)
+                             cfg.get("template"), pair_aware=False,
+                             diff_input=bool(cfg.get("diff_input")))
             out.append(softmax(logits_of(model, tok, ds, bs, prec)))
         results.append((out[0], out[1]))
     del model

@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import inspect
 import random
+import re
 import time
 from pathlib import Path
 
@@ -46,6 +47,20 @@ def load_config(path: str, overrides: list[str]) -> dict:
     return cfg
 
 
+_WORD = re.compile(r"\w+", re.UNICODE)
+
+
+def diff_segment(a: str, b: str) -> str:
+    """Second input segment with the word-level difference made explicit (idea A, PLAN 2d):
+    'B | only in first: <words of A not in B> | only in second: <words of B not in A>'.
+    Uses only the instance's own text, so it is test-safe; (B, A) gets its own diff."""
+    wa, wb = _WORD.findall(a.lower()), _WORD.findall(b.lower())
+    sa, sb = set(wa), set(wb)
+    only_a = list(dict.fromkeys(w for w in wa if w not in sb))
+    only_b = list(dict.fromkeys(w for w in wb if w not in sa))
+    return f"{b} | only in first: {', '.join(only_a) or '-'} | only in second: {', '.join(only_b) or '-'}"
+
+
 class PairDataset(torch.utils.data.Dataset):
     """`template` (e.g. "Phrase A: {a}\\nPhrase B: {b}\\nRelation:") is for decoder LMs, which have
     no [SEP] pair encoding; without it, encoder models get the usual tokenizer(text1, text2)."""
@@ -59,14 +74,19 @@ class PairDataset(torch.utils.data.Dataset):
         pair_aware: bool = False,
         xling: str | None = None,
         bias: tuple[np.ndarray, np.ndarray] | None = None,
+        diff_input: bool = False,
     ):
         # bias: (log p_bias(.|A,B), log p_bias(.|B,A)) per row, for PoE training (dico.debias)
         self.bias = bias
+        if diff_input and template:
+            raise NotImplementedError("diff_input is implemented for encoder pair inputs only")
+        second = diff_segment if diff_input else (lambda a, b: b)
         if template:
             texts = [template.format(a=a, b=b) for a, b in zip(df.text1, df.text2)]
             self.enc = tokenizer(texts, truncation=True, max_length=max_len)
         else:
-            self.enc = tokenizer(list(df.text1), list(df.text2), truncation=True, max_length=max_len)
+            self.enc = tokenizer(list(df.text1), [second(a, b) for a, b in zip(df.text1, df.text2)],
+                                 truncation=True, max_length=max_len)
         self.rev_enc = None
         if pair_aware:
             if template:
@@ -74,7 +94,8 @@ class PairDataset(torch.utils.data.Dataset):
                 self.rev_enc = tokenizer(rev_texts, truncation=True, max_length=max_len)
             else:
                 self.rev_enc = tokenizer(
-                    list(df.text2), list(df.text1), truncation=True, max_length=max_len
+                    list(df.text2), [second(b, a) for a, b in zip(df.text1, df.text2)],
+                    truncation=True, max_length=max_len,
                 )
         self.labels = df.label.map(LABEL2ID).tolist() if "label" in df else None
         self.partners = cross_lingual_partners(df, xling) if xling else None
@@ -436,9 +457,10 @@ def main() -> None:
         train_df = augment(train_df, exclude=set().union(*(text_pairs(d) for d in dev_sets.values())))
     train_df = train_df.reset_index(drop=True)
     bias = poe_bias(cfg, train_df, pair_aware, run_dir)
-    train_ds = PairDataset(train_df, tokenizer, cfg["max_len"], template, pair_aware, xling, bias)
+    diff = bool(cfg.get("diff_input"))
+    train_ds = PairDataset(train_df, tokenizer, cfg["max_len"], template, pair_aware, xling, bias, diff)
     dev_ds = {
-        t: PairDataset(df, tokenizer, cfg["max_len"], template, pair_aware)
+        t: PairDataset(df, tokenizer, cfg["max_len"], template, pair_aware, diff_input=diff)
         for t, df in dev_sets.items()
     }
 
@@ -494,7 +516,7 @@ def main() -> None:
         np.save(run_dir / f"dev_track{track}_probs.npy", probs)
         probs_swap = None
         if need_swap:  # p(.|B,A) for every row, computed by us: no twin lookup
-            swap_ds = PairDataset(swap_texts(df), tokenizer, cfg["max_len"], template, pair_aware)
+            swap_ds = PairDataset(swap_texts(df), tokenizer, cfg["max_len"], template, pair_aware, diff_input=diff)
             probs_swap = softmax(trainer.predict(swap_ds).predictions)
             np.save(run_dir / f"dev_track{track}_swap_probs.npy", probs_swap)
         raw = decode("argmax", df, probs, cfg)

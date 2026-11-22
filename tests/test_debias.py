@@ -47,3 +47,10 @@ def test_poe_confident_bias_shrinks_gradient():
     poe = pair_aware_loss(a, b, y, 0.0, 0.0, confident, confident)
     (g_poe,) = torch.autograd.grad(poe, a)
     assert g_poe.abs().sum() < g_plain.abs().sum()
+
+
+def test_diff_segment():
+    from dico.train import diff_segment
+
+    assert diff_segment("Two cats", "A white cat") == "A white cat | only in first: two, cats | only in second: a, white, cat"
+    assert diff_segment("a dog", "a dog").endswith("only in first: - | only in second: -")
