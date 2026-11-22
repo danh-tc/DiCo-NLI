@@ -58,7 +58,10 @@ class PairDataset(torch.utils.data.Dataset):
         template: str | None = None,
         pair_aware: bool = False,
         xling: str | None = None,
+        bias: tuple[np.ndarray, np.ndarray] | None = None,
     ):
+        # bias: (log p_bias(.|A,B), log p_bias(.|B,A)) per row, for PoE training (dico.debias)
+        self.bias = bias
         if template:
             texts = [template.format(a=a, b=b) for a, b in zip(df.text1, df.text2)]
             self.enc = tokenizer(texts, truncation=True, max_length=max_len)
@@ -90,6 +93,9 @@ class PairDataset(torch.utils.data.Dataset):
             item.update({f"par_{k}": v[j] for k, v in self.enc.items()})
             item["par_flip"] = int(flip)
             item["par_mask"] = int(bool(options))
+        if self.bias is not None:
+            item["poe_bias"] = self.bias[0][i].tolist()
+            item["poe_bias_rev"] = self.bias[1][i].tolist()
         if self.labels is not None:
             item["labels"] = self.labels[i]
         return item
@@ -136,7 +142,10 @@ class PairAwareCollator:
         for flag in ("par_flip", "par_mask"):
             if flag in features[0]:
                 batch[flag] = torch.tensor([row[flag] for row in features], dtype=torch.bool)
-        skip = {"labels", "par_flip", "par_mask"}
+        for key in ("poe_bias", "poe_bias_rev"):
+            if key in features[0]:
+                batch[key] = torch.tensor([row[key] for row in features], dtype=torch.float32)
+        skip = {"labels", "par_flip", "par_mask", "poe_bias", "poe_bias_rev"}
         groups = [[{k: v for k, v in row.items() if k not in skip and not k.startswith(self.PREFIXES)}
                    for row in features]]
         prefixes = [p for p in self.PREFIXES if any(k.startswith(p) for k in features[0])]
@@ -150,13 +159,22 @@ class PairAwareCollator:
         return batch
 
 
-def pair_aware_loss(normal_logits, reverse_logits, labels, weight: float, label_smoothing: float):
-    """Supervise both directions and align their distributions with Rev()."""
+def pair_aware_loss(normal_logits, reverse_logits, labels, weight: float, label_smoothing: float,
+                    bias=None, bias_rev=None):
+    """Supervise both directions and align their distributions with Rev().
+
+    With PoE (bias given), the supervised terms see log_softmax(logits) + log p_bias, so the main
+    model gets little gradient on rows the surface bias model already explains; the consistency
+    term stays on the main model's own logits."""
     perm = torch.as_tensor(REV_PERM, device=labels.device)
     reverse_labels = perm[labels]
+    sup_normal, sup_reverse = normal_logits, reverse_logits
+    if bias is not None:
+        sup_normal = F.log_softmax(normal_logits.float(), -1) + bias
+        sup_reverse = F.log_softmax(reverse_logits.float(), -1) + bias_rev
     supervised = 0.5 * (
-        F.cross_entropy(normal_logits, labels, label_smoothing=label_smoothing)
-        + F.cross_entropy(reverse_logits, reverse_labels, label_smoothing=label_smoothing)
+        F.cross_entropy(sup_normal, labels, label_smoothing=label_smoothing)
+        + F.cross_entropy(sup_reverse, reverse_labels, label_smoothing=label_smoothing)
     )
     aligned_reverse = reverse_logits[:, REV_PERM]
     p_log = F.log_softmax(normal_logits, dim=-1)
@@ -208,6 +226,7 @@ class PairAwareTrainer(Trainer):
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         labels = inputs.pop("labels")
         flip, mask = inputs.pop("par_flip", None), inputs.pop("par_mask", None)
+        bias, bias_rev = inputs.pop("poe_bias", None), inputs.pop("poe_bias_rev", None)
         views = [{k: v for k, v in inputs.items() if not k.startswith(("rev_", "par_"))}]
         for prefix in ("rev_", "par_"):
             part = {k[len(prefix):]: v for k, v in inputs.items() if k.startswith(prefix)}
@@ -222,6 +241,8 @@ class PairAwareTrainer(Trainer):
             labels,
             self.pair_consistency_weight,
             self.args.label_smoothing_factor,
+            bias,
+            bias_rev,
         )
         if len(views) == 3 and self.xling_weight > 0:
             loss = loss + self.xling_weight * xling_loss(logits[0], logits[2], flip, mask, self.xling_mode)
@@ -291,6 +312,24 @@ def pair_trainer_kwargs(cfg: dict) -> dict:
         "xling_weight": float(cfg.get("xling_consistency_weight", 0.0)),
         "xling_mode": cfg.get("xling_mode", "js"),
     }
+
+
+def poe_bias(cfg: dict, train_df: pd.DataFrame, pair_aware: bool, out_dir: Path | None = None):
+    """Cross-fitted bias log-probs for PoE training, or None when `poe_bias` is not set."""
+    kind = cfg.get("poe_bias")
+    if not kind:
+        return None
+    if kind != "surface":
+        raise ValueError(f"unknown poe_bias: {kind}")
+    if not pair_aware:
+        raise NotImplementedError("poe_bias is implemented for the pair-aware trainer only")
+    from .debias import surface_bias_logprobs
+
+    lp, lp_rev, report = surface_bias_logprobs(train_df)
+    print(f"PoE surface bias model (cross-fit on train): {report}")
+    if out_dir is not None:
+        save_json(report, out_dir / "poe_bias_report.json")
+    return lp, lp_rev
 
 
 def compute_metrics(eval_pred):
@@ -395,7 +434,9 @@ def main() -> None:
         from .augment import augment, text_pairs
 
         train_df = augment(train_df, exclude=set().union(*(text_pairs(d) for d in dev_sets.values())))
-    train_ds = PairDataset(train_df, tokenizer, cfg["max_len"], template, pair_aware, xling)
+    train_df = train_df.reset_index(drop=True)
+    bias = poe_bias(cfg, train_df, pair_aware, run_dir)
+    train_ds = PairDataset(train_df, tokenizer, cfg["max_len"], template, pair_aware, xling, bias)
     dev_ds = {
         t: PairDataset(df, tokenizer, cfg["max_len"], template, pair_aware)
         for t, df in dev_sets.items()

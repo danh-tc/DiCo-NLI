@@ -35,6 +35,7 @@ from dico.train import (  # noqa: E402
     PairDataset,
     build_model,
     load_config,
+    poe_bias,
     softmax,
     trainer_setup,
     uses_pair_inputs,
@@ -144,8 +145,11 @@ def main() -> None:
         print(f"\nfold={fold + 1}/{args.folds} train={len(train_df)} valid={len(valid_df)}")
         model = build_model(cfg, tokenizer, precision)
         trainer_cls, extra = trainer_setup(cfg, model)
+        # PoE bias is cross-fitted inside this fold's train rows only (never sees the held-out fold)
+        train_df = train_df.reset_index(drop=True)
+        bias = poe_bias(cfg, train_df, pair_aware)
         # Folds group whole pair_ids, so every cross-lingual partner stays in the same fold.
-        train_ds = PairDataset(train_df, tokenizer, cfg["max_len"], template, pair_aware, xling)
+        train_ds = PairDataset(train_df, tokenizer, cfg["max_len"], template, pair_aware, xling, bias)
         trainer = trainer_cls(
             model=model,
             args=training_args(cfg, out / f"fold{fold}", fold_seed, precision, pair_aware),
