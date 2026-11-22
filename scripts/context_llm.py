@@ -64,13 +64,20 @@ def prompt(tok, a: str, b: str) -> str:
 
 
 @torch.no_grad()
-def generate_frames(pairs: list[tuple[str, str]], cache: Path, bs: int = 48) -> dict:
+def generate_frames(pairs: list[tuple[str, str]], cache: Path, llm: str = LLM, load_4bit: bool = False,
+                    bs: int = 48) -> dict:
     frames = json.loads(cache.read_text(encoding="utf-8")) if cache.exists() else {}
     todo = [p for p in pairs if "|||".join(p) not in frames]
     if todo:
-        tok = AutoTokenizer.from_pretrained(LLM, padding_side="left")
+        tok = AutoTokenizer.from_pretrained(llm, padding_side="left")
         dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16  # T4: fp16
-        lm = AutoModelForCausalLM.from_pretrained(LLM, dtype=dtype).cuda().eval()
+        if load_4bit:
+            from transformers import BitsAndBytesConfig
+
+            q = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=dtype)
+            lm = AutoModelForCausalLM.from_pretrained(llm, quantization_config=q, device_map={"": 0}).eval()
+        else:
+            lm = AutoModelForCausalLM.from_pretrained(llm, dtype=dtype).cuda().eval()
         for s in range(0, len(todo), bs):
             chunk = todo[s:s + bs]
             enc = tok([prompt(tok, a, b) for a, b in chunk], return_tensors="pt", padding=True).to("cuda")
@@ -108,12 +115,15 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--track", type=int, default=1)
     ap.add_argument("--out", type=Path, default=env.runs_dir() / "context_llm")
+    ap.add_argument("--llm", default=LLM)
+    ap.add_argument("--load_4bit", action="store_true")
+    ap.add_argument("--gen_bs", type=int, default=48)
     args = ap.parse_args()
     t = args.track
     train = load_split("train", [t]).reset_index(drop=True)
     dev = load_split("dev", [t]).reset_index(drop=True)
     pairs = sorted({canon(a, b) for d in (train, dev) for a, b in zip(d.text1, d.text2)})
-    frames = generate_frames(pairs, args.out / f"frames_track{t}.json")
+    frames = generate_frames(pairs, args.out / f"frames_track{t}.json", args.llm, args.load_4bit, args.gen_bs)
 
     tok = AutoTokenizer.from_pretrained(MODEL)
     model = AutoModelForSequenceClassification.from_pretrained(MODEL).float().to("cuda").eval()
