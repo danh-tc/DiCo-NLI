@@ -78,6 +78,8 @@ def training_args(
         eval_strategy="no",
         save_strategy="no",
         logging_steps=100,
+        gradient_checkpointing=cfg.get("gradient_checkpointing", False),
+        gradient_checkpointing_kwargs={"use_reentrant": False},
         bf16=precision == "bf16",
         fp16=precision == "fp16",
         report_to="none",

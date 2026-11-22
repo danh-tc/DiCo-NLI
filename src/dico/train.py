@@ -331,7 +331,23 @@ def build_model(cfg: dict, tokenizer, prec: str):
 
     # Frozen base in half precision (fits 8 GB); trainable params (LoRA + score head) in fp32.
     base_dtype = {"bf16": torch.bfloat16, "fp16": torch.float16}.get(prec, torch.float32)
-    model = AutoModelForSequenceClassification.from_pretrained(cfg["model_name"], dtype=base_dtype, **kwargs)
+    if cfg.get("load_4bit"):
+        # QLoRA: frozen base in nf4 (7B fits a 16 GB T4); the new `score` head stays unquantized.
+        from peft import prepare_model_for_kbit_training
+        from transformers import BitsAndBytesConfig
+
+        quant = BitsAndBytesConfig(
+            load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=base_dtype, llm_int8_skip_modules=["score"],
+        )
+        model = AutoModelForSequenceClassification.from_pretrained(
+            cfg["model_name"], quantization_config=quant, dtype=base_dtype,
+            device_map={"": torch.cuda.current_device()}, **kwargs,
+        )
+        # gradient checkpointing is switched on by TrainingArguments (use_reentrant=False)
+        model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=False)
+    else:
+        model = AutoModelForSequenceClassification.from_pretrained(cfg["model_name"], dtype=base_dtype, **kwargs)
     model.config.pad_token_id = tokenizer.pad_token_id
     model = get_peft_model(model, LoraConfig(
         task_type=TaskType.SEQ_CLS,  # also keeps the new `score` head trainable
@@ -405,6 +421,8 @@ def main() -> None:
         eval_strategy="epoch",
         save_strategy="no",  # fixed epochs, no best-on-dev selection: dev scores stay honest
         logging_steps=50,
+        gradient_checkpointing=cfg.get("gradient_checkpointing", False),
+        gradient_checkpointing_kwargs={"use_reentrant": False},
         bf16=prec == "bf16",
         fp16=prec == "fp16",
         report_to="none",

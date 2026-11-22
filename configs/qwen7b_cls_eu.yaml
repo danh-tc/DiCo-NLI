@@ -1,0 +1,22 @@
+# Qwen2.5-7B QLoRA (nf4 base + LoRA), Basque only (PLAN.md 2d, "Qwen 7B cho EU").
+# Same recipe as qwen_cls_en.yaml (template, lr, epochs, LoRA, label smoothing); only the base
+# model size changes, plus a 4-bit base to fit a 16 GB T4.
+name: qwen7b_cls_eu
+model_name: Qwen/Qwen2.5-7B
+train_tracks: [3]
+eval_tracks: [3]
+template: "Phrase A: {a}\nPhrase B: {b}\nRelation:"
+max_len: 128
+lr: 1.0e-4
+epochs: 3
+batch_size: 8
+eval_batch_size: 32
+label_smoothing: 0.1
+load_4bit: true
+gradient_checkpointing: false   # phrases are ~50 tokens: activations are tiny, checkpointing only costs time
+decoders: [argmax, self_swap]
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
